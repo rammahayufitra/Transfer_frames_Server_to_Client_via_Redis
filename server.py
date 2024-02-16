@@ -2,6 +2,8 @@ import redis
 import base64 
 import cv2
 
+from face_detector import mtcnn_detect, face_location,  boxes_draw
+
 redis_connection = redis.Redis(host="localhost", port=6379, db=1)
 
 def encode_frame(frame):
@@ -11,19 +13,22 @@ def encode_frame(frame):
     return encoded_frame
 
 def main():
-    cap = cv2.VideoCapture("http://192.168.1.64:8080/video")
+    cap = cv2.VideoCapture(0)
     if not cap.isOpened():
-        print("Tidak bisa membuka kamera.")
+        print("can not access camera.")
         return
 
     while True:
         ret, frame = cap.read()
+        encoded_frame = encode_frame(frame)
+        #set data with expired time 2 second
+        redis_connection.set('frame_redis', encoded_frame, ex=2)
         if ret:
-            frame =cv2.resize(frame,(640,320))
-            encoded_frame = encode_frame(frame)
-            redis_connection.set('frame1', encoded_frame, ex=2)
+            boxes, probs = mtcnn_detect(frame)
+            x, y, w, h = face_location(boxes, probs)
+            redis_connection.set('faces_location', str({'x':x, 'y':y, 'w':w, 'h':h}), ex=2)
         else:
-            cap = cv2.VideoCapture("http://192.168.1.64:8080/video")
+            cap = cv2.VideoCapture(0)
        
 
 if __name__ == "__main__":
